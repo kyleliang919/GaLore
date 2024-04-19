@@ -76,7 +76,7 @@ class AdamW(Optimizer):
             loss = closure()
 
         for group in self.param_groups:
-            for p in group["params"]:
+            for i, p in enumerate(group["params"]):
                 if p.grad is None:
                     continue
                 grad = p.grad
@@ -93,7 +93,7 @@ class AdamW(Optimizer):
                     if "projector" not in state:
                         state["projector"] = GaLoreProjector(group["rank"], update_proj_gap=group["update_proj_gap"], scale=group["scale"], proj_type=group["proj_type"])
                     
-                    grad = state["projector"].project(grad, state["step"])
+                    grad = state["projector"].project(grad, state["step"]) #, group["names"][i])
 
                 # State initialization
                 if "exp_avg" not in state:

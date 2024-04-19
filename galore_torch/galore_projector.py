@@ -1,3 +1,5 @@
+import wandb
+import math
 import torch
 
 class GaLoreProjector:
@@ -9,7 +11,7 @@ class GaLoreProjector:
         self.ortho_matrix = None
         self.proj_type = proj_type
         
-    def project(self, full_rank_grad, iter):
+    def project(self, full_rank_grad, iter, name = None):
         
         if self.proj_type == 'std':
             if full_rank_grad.shape[0] >= full_rank_grad.shape[1]:
@@ -41,7 +43,64 @@ class GaLoreProjector:
             if self.ortho_matrix is None or iter % self.update_proj_gap == 0:
                 self.ortho_matrix = self.get_orthogonal_matrix(full_rank_grad, self.rank, type='full')
             low_rank_grad = torch.matmul(self.ortho_matrix[0].t(), full_rank_grad) @ self.ortho_matrix[1].t()
-                
+        elif self.proj_type == 'random':
+            if full_rank_grad.shape[0] >= full_rank_grad.shape[1]:
+                if self.ortho_matrix is None or iter % self.update_proj_gap == 0:
+                    self.ortho_matrix = self.get_orthogonal_matrix(torch.randn_like(full_rank_grad), self.rank, type='right')
+                low_rank_grad = torch.matmul(full_rank_grad, self.ortho_matrix.t())
+            else:
+                if self.ortho_matrix is None or iter % self.update_proj_gap == 0:
+                    self.ortho_matrix = self.get_orthogonal_matrix(torch.randn_like(full_rank_grad), self.rank, type='left')
+                low_rank_grad = torch.matmul(self.ortho_matrix.t(), full_rank_grad)         
+        elif self.proj_type == 'continuous':
+            if full_rank_grad.shape[0] >= full_rank_grad.shape[1]:
+                if self.ortho_matrix is None:
+                    self.ortho_matrix = self.get_orthogonal_matrix(full_rank_grad, self.rank, type='right')
+                else:
+                    with torch.enable_grad():
+                        self.ortho_matrix.requires_grad=True
+                        self.ortho_matrix.grad = None 
+                        #loss = torch.norm(full_rank_grad @ self.ortho_matrix.t() @ self.ortho_matrix - full_rank_grad) # form 1
+                        #loss = torch.norm(full_rank_grad @ self.ortho_matrix.t() @ self.ortho_matrix - full_rank_grad) + 0.1 * torch.norm(self.ortho_matrix) # form 2
+                        projection = self.ortho_matrix.t() @ self.ortho_matrix
+                        transposed_projection = self.ortho_matrix @ self.ortho_matrix.t()
+                        #loss = torch.norm(full_rank_grad @ projection - full_rank_grad) + 0.1 * torch.norm(projection -  torch.eye(projection.shape[0]).to(projection.device)) # form 3
+                        #loss = torch.norm(full_rank_grad @ projection - full_rank_grad) ** 2 + 0.1 * (torch.norm(projection -  torch.eye(projection.shape[0]).to(projection.device))) ** 2 # form 4
+                        identity = torch.eye(transposed_projection.shape[0]).to(transposed_projection.device) # form 5
+                        normalized_full_rank_grad = full_rank_grad/torch.norm(full_rank_grad) # form 5
+                        loss = torch.norm(normalized_full_rank_grad @ projection - normalized_full_rank_grad) ** 2 + 0.1 * (torch.norm(transposed_projection -  torch.eye(transposed_projection.shape[0]).to(transposed_projection.device))) ** 2 # form 5
+                        loss.backward()
+                        if name is not None:
+                            wandb.log({name:wandb.Histogram(self.ortho_matrix.grad.cpu().float()), name+"_norm": torch.norm(self.ortho_matrix.grad).item()})
+                        # self.ortho_matrix.grad = self.ortho_matrix.grad/torch.norm(self.ortho_matrix.grad) # form 4.5
+                        self.ortho_matrix.data = self.ortho_matrix.data - 1/self.update_proj_gap * self.ortho_matrix.grad
+                        self.ortho_matrix.requires_grad=False 
+                        self.ortho_matrix.grad = None
+                low_rank_grad = torch.matmul(full_rank_grad, self.ortho_matrix.t())
+            else:
+                if self.ortho_matrix is None:
+                    self.ortho_matrix = self.get_orthogonal_matrix(full_rank_grad, self.rank, type='left')
+                else:
+                    with torch.enable_grad():
+                        self.ortho_matrix.requires_grad = True
+                        self.ortho_matrix.grad = None
+                        #loss = torch.norm(full_rank_grad @ self.ortho_matrix.t() @ self.ortho_matrix - full_rank_grad) # form 1
+                        #loss = torch.norm(self.ortho_matrix @ self.ortho_matrix.t() @ full_rank_grad - full_rank_grad) + 0.1 * torch.norm(self.ortho_matrix) # form 2
+                        projection = self.ortho_matrix @ self.ortho_matrix.t()
+                        transposed_projection = self.ortho_matrix.t() @ self.ortho_matrix
+                        #loss = torch.norm(projection @ full_rank_grad - full_rank_grad) + 0.1 * torch.norm(projection - torch.eye(projection.shape[0]).to(projection.device)) # form 3
+                        #loss = torch.norm(projection @ full_rank_grad - full_rank_grad) ** 2 + 0.1 * (torch.norm(projection - torch.eye(projection.shape[0]).to(projection.device))) ** 2 # form 4
+                        identity = torch.eye(transposed_projection.shape[0]).to(transposed_projection.device) # form 5
+                        normalized_full_rank_grad = full_rank_grad/torch.norm(full_rank_grad) # form 5
+                        loss = torch.norm(projection @ normalized_full_rank_grad - normalized_full_rank_grad) ** 2 + 0.1 * (torch.norm(transposed_projection - identity)) ** 2 # form 5
+                        loss.backward()
+                        if name is not None:
+                            wandb.log({name:wandb.Histogram(self.ortho_matrix.grad.cpu().float()), name+"_norm": torch.norm(self.ortho_matrix.grad).item()})
+                        # self.ortho_matrix.grad = self.ortho_matrix.grad/torch.norm(self.ortho_matrix.grad) # form 4.5
+                        self.ortho_matrix.data = self.ortho_matrix.data - 1/self.update_proj_gap * self.ortho_matrix.grad
+                        self.ortho_matrix.requires_grad = False
+                        self.ortho_matrix.grad = None
+                low_rank_grad = torch.matmul(self.ortho_matrix.t(), full_rank_grad)
         return low_rank_grad
 
     def project_back(self, low_rank_grad):
@@ -62,8 +121,16 @@ class GaLoreProjector:
             full_rank_grad = torch.matmul(self.ortho_matrix, low_rank_grad)
         elif self.proj_type == 'full':
             full_rank_grad = torch.matmul(self.ortho_matrix[0], low_rank_grad) @ self.ortho_matrix[1]
-        
-        
+        elif self.proj_type == 'random':
+            if low_rank_grad.shape[0] >= low_rank_grad.shape[1]:
+                full_rank_grad = torch.matmul(low_rank_grad, self.ortho_matrix)
+            else:
+                full_rank_grad = torch.matmul(self.ortho_matrix, low_rank_grad)
+        elif self.proj_type == 'continuous':
+            if low_rank_grad.shape[0] >= low_rank_grad.shape[1]:
+                full_rank_grad = torch.matmul(low_rank_grad, self.ortho_matrix)
+            else:
+                full_rank_grad = torch.matmul(self.ortho_matrix, low_rank_grad)
         return full_rank_grad * self.scale
         
         

@@ -263,6 +263,7 @@ def main(args):
     if 'galore' in args.optimizer.lower():
         # make parameters with "rank" to a single group, if param_name has "mlp" or "attn"
         galore_params = []
+        galore_param_names = []
         target_modules_list = ["attn", "mlp"]
         for module_name, module in model.named_modules():
             if not isinstance(module, nn.Linear):
@@ -273,12 +274,13 @@ def main(args):
             
             print('enable GaLore for weights in module: ', module_name)
             galore_params.append(module.weight)
+            galore_param_names.append(module_name)
         id_galore_params = [id(p) for p in galore_params]
         # make parameters without "rank" to another group
         regular_params = [p for p in model.parameters() if id(p) not in id_galore_params]
         # then call galore_adamw
         param_groups = [{'params': regular_params}, 
-                        {'params': galore_params, 'rank': args.rank, 'update_proj_gap': args.update_proj_gap, 'scale': args.galore_scale, 'proj_type': args.proj_type}]
+                {'params': galore_params, 'rank': args.rank, 'update_proj_gap': args.update_proj_gap, 'scale': args.galore_scale, 'proj_type': args.proj_type, 'names': galore_param_names}]
         
     # print params and trainable params
     logger.info(f"\n{model}\n")
