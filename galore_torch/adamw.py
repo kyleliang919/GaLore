@@ -62,6 +62,7 @@ class AdamW(Optimizer):
             raise ValueError(f"Invalid epsilon value: {eps} - should be >= 0.0")
         defaults = {"lr": lr, "betas": betas, "eps": eps, "weight_decay": weight_decay, "correct_bias": correct_bias}
         super().__init__(params, defaults)
+        self.init_lr = lr
 
     @torch.no_grad()
     def step(self, closure: Callable = None):
@@ -91,9 +92,8 @@ class AdamW(Optimizer):
                 # GaLore Projection
                 if "rank" in group:
                     if "projector" not in state:
-                        state["projector"] = GaLoreProjector(group["rank"], update_proj_gap=group["update_proj_gap"], scale=group["scale"], proj_type=group["proj_type"])
-                    
-                    grad = state["projector"].project(grad, state["step"]) #, group["names"][i])
+                        state["projector"] = GaLoreProjector(group["rank"], update_proj_gap=group["update_proj_gap"], scale=group["scale"], proj_type=group["proj_type"], lamb = group["lamb"])
+                    grad = state["projector"].project(grad, state["step"], update_proj_stepsize_ratio = group["lr"]/self.init_lr) #, group["names"][i])
 
                 # State initialization
                 if "exp_avg" not in state:
