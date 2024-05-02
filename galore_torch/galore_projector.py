@@ -1,9 +1,11 @@
 import wandb
 import math
+import transformers
 import torch
+import bitsandbytes as bnb
 
 class GaLoreProjector:
-    def __init__(self, rank, verbose=False, update_proj_gap=200, scale=1.0, proj_type='std', lamb = None):
+    def __init__(self, rank, verbose=False, update_proj_gap=200, scale=1.0, proj_type='std', lamb = None, eight_bit = False):
         self.rank = rank
         self.verbose = verbose
         self.update_proj_gap = update_proj_gap
@@ -11,6 +13,7 @@ class GaLoreProjector:
         self.ortho_matrix = None
         self.proj_type = proj_type
         self.lamb = lamb
+        self.eight_bit = eight_bit
         
     def project(self, full_rank_grad, iter, name = None, update_proj_stepsize_ratio = 1.0):
         if self.proj_type == 'std':
@@ -56,16 +59,19 @@ class GaLoreProjector:
             if full_rank_grad.shape[0] >= full_rank_grad.shape[1]:
                 if self.ortho_matrix is None:
                     self.ortho_matrix = self.get_orthogonal_matrix(full_rank_grad, self.rank, type='right')
-                    self.ortho_matrix_optim = torch.optim.AdamW([self.ortho_matrix], lr = 1/self.update_proj_gap)
+                    if not self.eight_bit:
+                        self.ortho_matrix_optim = torch.optim.AdamW([self.ortho_matrix], lr = 1/self.update_proj_gap)
+                    else:
+                        self.ortho_matrix_optim = bnb.optim.Adam8bit([self.ortho_matrix], lr=1/self.update_proj_gap)
                 else:
                     with torch.enable_grad():
                         self.ortho_matrix.requires_grad=True
                         self.ortho_matrix.grad = None 
                         projection = self.ortho_matrix.t() @ self.ortho_matrix
                         transposed_projection = self.ortho_matrix @ self.ortho_matrix.t()
-                        #identity = torch.eye(transposed_projection.shape[0]).to(transposed_projection.device) # form 5
-                        normalized_full_rank_grad = full_rank_grad/torch.norm(full_rank_grad) # form 5, 5.1, 5.2
-                        loss = torch.norm(normalized_full_rank_grad @ projection - normalized_full_rank_grad) ** 2 #+ self.lamb * (torch.norm(transposed_projection - identity)) ** 2  # form 5
+                        identity = torch.eye(transposed_projection.shape[0]).to(transposed_projection.device)
+                        normalized_full_rank_grad = full_rank_grad/torch.norm(full_rank_grad)
+                        loss = torch.norm(normalized_full_rank_grad @ projection - normalized_full_rank_grad) ** 2 + self.lamb * (torch.norm(transposed_projection - identity)) ** 2
                         loss.backward()
                         if name is not None:
                             wandb.log({name:wandb.Histogram(self.ortho_matrix.grad.cpu().float()), name+"_norm": torch.norm(self.ortho_matrix.grad).item()})
@@ -79,16 +85,19 @@ class GaLoreProjector:
             else:
                 if self.ortho_matrix is None:
                     self.ortho_matrix = self.get_orthogonal_matrix(full_rank_grad, self.rank, type='left')
-                    self.ortho_matrix_optim = torch.optim.AdamW([self.ortho_matrix], lr = 1/self.update_proj_gap)
+                    if not self.eight_bit:
+                        self.ortho_matrix_optim = torch.optim.AdamW([self.ortho_matrix], lr = 1/self.update_proj_gap)
+                    else:
+                        self.ortho_matrix_optim = bnb.optim.Adam8bit([self.ortho_matrix], lr=1/self.update_proj_gap)
                 else:
                     with torch.enable_grad():
                         self.ortho_matrix.requires_grad = True
                         self.ortho_matrix.grad = None
                         projection = self.ortho_matrix @ self.ortho_matrix.t()
                         transposed_projection = self.ortho_matrix.t() @ self.ortho_matrix
-                        identity = torch.eye(transposed_projection.shape[0]).to(transposed_projection.device) # form 5
-                        normalized_full_rank_grad = full_rank_grad/torch.norm(full_rank_grad) # form 5, 5.1, 5.2
-                        loss = torch.norm(projection @ normalized_full_rank_grad - normalized_full_rank_grad) ** 2 #+ self.lamb * (torch.norm(transposed_projection - identity)) ** 2 # form 5
+                        identity = torch.eye(transposed_projection.shape[0]).to(transposed_projection.device)
+                        normalized_full_rank_grad = full_rank_grad/torch.norm(full_rank_grad)
+                        loss = torch.norm(projection @ normalized_full_rank_grad - normalized_full_rank_grad) ** 2 + self.lamb * (torch.norm(transposed_projection - identity)) ** 2
                         loss.backward()
                         if name is not None:
                             wandb.log({name:wandb.Histogram(self.ortho_matrix.grad.cpu().float()), name+"_norm": torch.norm(self.ortho_matrix.grad).item()})

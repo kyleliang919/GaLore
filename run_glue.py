@@ -220,7 +220,8 @@ def parse_args():
     parser.add_argument("--eval_llama", action="store_true", help="Whether or not to evaluate llama model.")
     # low_rank_method
     parser.add_argument("--low_rank_method", type=str, default=None, help="low rank method for wandb sweep")
-    
+    # lamb for continuous galore
+    parser.add_argument("--lamb", type=float, default=0.1)
     args = parser.parse_args()
     
     # Sanity checks
@@ -532,7 +533,7 @@ def main():
         regular_params = [p for p in model.parameters() if id(p) not in id_galore_params]
         # then call galore_adamw
         param_groups = [{'params': regular_params}, 
-                        {'params': galore_params, 'rank': args.lora_r, 'update_proj_gap': args.update_proj_gap, 'scale': args.galore_scale, 'proj_type': args.proj_type}]
+                {'params': galore_params, 'rank': args.lora_r, 'update_proj_gap': args.update_proj_gap, 'scale': args.galore_scale, 'proj_type': args.proj_type, 'lamb': args.lamb}]
         optimizer = GaLoreAdamW(param_groups, lr=args.learning_rate)
     
 
