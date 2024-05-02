@@ -5,7 +5,7 @@ import torch
 import bitsandbytes as bnb
 
 class GaLoreProjector:
-    def __init__(self, rank, verbose=False, update_proj_gap=200, scale=1.0, proj_type='std', lamb = None, eight_bit = False):
+    def __init__(self, rank, verbose=False, update_proj_gap=200, scale=1.0, proj_type='std', lamb = None, eight_bit = False, update_proj_first = True):
         self.rank = rank
         self.verbose = verbose
         self.update_proj_gap = update_proj_gap
@@ -14,6 +14,7 @@ class GaLoreProjector:
         self.proj_type = proj_type
         self.lamb = lamb
         self.eight_bit = eight_bit
+        self.update_proj_first = update_proj_first
         
     def project(self, full_rank_grad, iter, name = None, update_proj_stepsize_ratio = 1.0):
         if self.proj_type == 'std':
@@ -77,10 +78,13 @@ class GaLoreProjector:
                             wandb.log({name:wandb.Histogram(self.ortho_matrix.grad.cpu().float()), name+"_norm": torch.norm(self.ortho_matrix.grad).item()})
                         update_proj_stepsize = 1/self.update_proj_gap * update_proj_stepsize_ratio
                         for group in self.ortho_matrix_optim.param_groups:
-                            group["lr"] = update_proj_stepsize 
-                        self.ortho_matrix_optim.step()
-                        self.ortho_matrix.requires_grad=False 
-                        self.ortho_matrix.grad = None
+                            group["lr"] = update_proj_stepsize
+                        if self.update_proj_first:
+                            self.ortho_matrix_optim.step()
+                            self.ortho_matrix.requires_grad=False 
+                            self.ortho_matrix.grad = None
+                        else:
+                            self.ortho_matrix.requires_grad=False
                 low_rank_grad = torch.matmul(full_rank_grad, self.ortho_matrix.t())
             else:
                 if self.ortho_matrix is None:
@@ -104,9 +108,12 @@ class GaLoreProjector:
                         update_proj_stepsize = 1/self.update_proj_gap * update_proj_stepsize_ratio
                         for group in self.ortho_matrix_optim.param_groups:
                             group["lr"] = update_proj_stepsize
-                        self.ortho_matrix_optim.step()
-                        self.ortho_matrix.requires_grad = False
-                        self.ortho_matrix.grad = None
+                        if self.update_proj_first:
+                            self.ortho_matrix_optim.step()
+                            self.ortho_matrix.requires_grad = False
+                            self.ortho_matrix.grad = None
+                        else:
+                            self.ortho_matrix.requires_grad=False
                 low_rank_grad = torch.matmul(self.ortho_matrix.t(), full_rank_grad)
         return low_rank_grad
 
@@ -138,6 +145,9 @@ class GaLoreProjector:
                 full_rank_grad = torch.matmul(low_rank_grad, self.ortho_matrix)
             else:
                 full_rank_grad = torch.matmul(self.ortho_matrix, low_rank_grad)
+            if not self.update_proj_first:
+                self.ortho_matrix_optim.step()
+                self.ortho_matrix.grad = None
         return full_rank_grad * self.scale
         
         
