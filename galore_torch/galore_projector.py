@@ -75,7 +75,7 @@ class GaLoreProjector:
                         loss = torch.norm(normalized_full_rank_grad @ projection - normalized_full_rank_grad) ** 2 + self.lamb * (torch.norm(transposed_projection - identity)) ** 2
                         loss.backward()
                         if name is not None:
-                            wandb.log({name:wandb.Histogram(self.ortho_matrix.grad.cpu().float()), name+"_norm": torch.norm(self.ortho_matrix.grad).item()})
+                            wandb.log({name:wandb.Histogram(self.ortho_matrix.grad.cpu().float()), name+"_norm": torch.norm(self.ortho_matrix.grad).item(), name+'_proj_loss': loss.item()})
                         update_proj_stepsize = 1/self.update_proj_gap * update_proj_stepsize_ratio
                         for group in self.ortho_matrix_optim.param_groups:
                             group["lr"] = update_proj_stepsize
@@ -104,7 +104,7 @@ class GaLoreProjector:
                         loss = torch.norm(projection @ normalized_full_rank_grad - normalized_full_rank_grad) ** 2 + self.lamb * (torch.norm(transposed_projection - identity)) ** 2
                         loss.backward()
                         if name is not None:
-                            wandb.log({name:wandb.Histogram(self.ortho_matrix.grad.cpu().float()), name+"_norm": torch.norm(self.ortho_matrix.grad).item()})
+                            wandb.log({name:wandb.Histogram(self.ortho_matrix.grad.cpu().float()), name+"_norm": torch.norm(self.ortho_matrix.grad).item(), name+'_proj_loss': loss.item()})
                         update_proj_stepsize = 1/self.update_proj_gap * update_proj_stepsize_ratio
                         for group in self.ortho_matrix_optim.param_groups:
                             group["lr"] = update_proj_stepsize

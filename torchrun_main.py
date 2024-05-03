@@ -73,6 +73,7 @@ def parse_args(args):
     parser.add_argument("--lamb", type=float, default=0.1) 
     parser.add_argument("--update_proj_after", default=False, action="store_true")
     
+    parser.add_argument("--log_details", default=False, action="store_true")
     # disable ddp, single_gpu
     parser.add_argument("--single_gpu", default=False, action="store_true")
     args = parser.parse_args(args)
@@ -275,7 +276,10 @@ def main(args):
             
             print('enable GaLore for weights in module: ', module_name)
             galore_params.append(module.weight)
-            galore_param_names.append(module_name)
+            if args.log_details:
+                galore_param_names.append(module_name)
+            else:
+                galore_param_names.append(None)
         id_galore_params = [id(p) for p in galore_params]
         # make parameters without "rank" to another group
         regular_params = [p for p in model.parameters() if id(p) not in id_galore_params]
@@ -338,10 +342,12 @@ def main(args):
     elif args.optimizer.lower() == 'galore_adamw8bit_per_layer':
         # TODO: seems scheduler call twice in one update step, need to check, for now double the num_training_steps, warmup_steps and update_proj_gap
         optimizer_dict = {}
-        for p in model.parameters():
+        for p_name, p in model.named_parameters():
             if p.requires_grad:
                 if id(p) in id_galore_params:
-                    optimizer_dict[p] = GaLoreAdamW8bit([{'params': [p], 'rank': args.rank, 'update_proj_gap': args.update_proj_gap * 2, 'scale': args.galore_scale, 'proj_type': args.proj_type, 'lamb': args.lamb, 'update_proj_first': not args.update_proj_after}], lr=args.lr, weight_decay=args.weight_decay)
+                    if not args.log_details:
+                        p_name = None
+                    optimizer_dict[p] = GaLoreAdamW8bit([{'params': [p], 'rank': args.rank, 'update_proj_gap': args.update_proj_gap * 2, 'scale': args.galore_scale, 'proj_type': args.proj_type, 'names': [p_name], 'lamb': args.lamb, 'update_proj_first': not args.update_proj_after}], lr=args.lr, weight_decay=args.weight_decay)
                 else:
                     optimizer_dict[p] = bnb.optim.Adam8bit([p], lr=args.lr, weight_decay=args.weight_decay)
 

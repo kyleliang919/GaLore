@@ -93,7 +93,7 @@ class AdamW(Optimizer):
                 if "rank" in group:
                     if "projector" not in state:
                         state["projector"] = GaLoreProjector(group["rank"], update_proj_gap=group["update_proj_gap"], scale=group["scale"], proj_type=group["proj_type"], lamb = group["lamb"], update_proj_first = group["update_proj_first"])
-                    grad = state["projector"].project(grad, state["step"], update_proj_stepsize_ratio = group["lr"]/self.init_lr) # adding this argument will log all statistics to wandb:  group["names"][i])
+                    grad = state["projector"].project(grad, state["step"], update_proj_stepsize_ratio = group["lr"]/self.init_lr, name = group["names"][i])
 
                 # State initialization
                 if "exp_avg" not in state:
