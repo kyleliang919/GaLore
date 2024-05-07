@@ -43,14 +43,14 @@ class AdamW8bit(Optimizer2State):
                 # GaLore Projection
                 if "rank" in group:
                     if "projector" not in state:
-                        state["projector"] = GaLoreProjector(group["rank"], update_proj_gap=group["update_proj_gap"], scale=group["scale"], proj_type=group["proj_type"], lamb = group["lamb"], eight_bit = True)
+                        state["projector"] = GaLoreProjector(group["rank"], update_proj_gap=group["update_proj_gap"], scale=group["scale"], proj_type=group["proj_type"], lamb = group["lamb"], eight_bit = True, update_proj_first = group["update_proj_first"])
                         
                     if 'weight_decay' in group and group['weight_decay'] > 0:
                         # ensure that the weight decay is not applied to the norm grad
                         group['weight_decay_saved'] = group['weight_decay']
                         group['weight_decay'] = 0
                     
-                    grad = state["projector"].project(p.grad, state["step"], update_proj_stepsize_ratio = group["lr"]/self.init_lr)
+                    grad = state["projector"].project(p.grad, state["step"], update_proj_stepsize_ratio = group["lr"]/self.init_lr, name = group["names"][pindex])
                     
                     # suboptimal implementation
                     p.saved_data = p.data.clone()
