@@ -450,8 +450,10 @@ def main(args):
             current_model_directory = f"{args.save_dir}/model_{update_step}"
             logger.info(f"Saving model and optimizer to {current_model_directory}, update step {update_step}")
             os.makedirs(args.save_dir, exist_ok=True)
-            model.module.save_pretrained(current_model_directory, max_shard_size='100GB')
-
+            try:
+                model.module.save_pretrained(current_model_directory, max_shard_size='100GB')
+            except:
+                model.save_pretrained(current_model_directory, max_shard_size='100GB')
             optimizer_checkpoint = {
                 "optimizer": optimizer.state_dict(),
                 "scheduler": scheduler.state_dict(),
