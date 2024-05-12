@@ -378,7 +378,7 @@ def main(args):
                 
         layer_wise_flag = True
     elif args.optimizer.lower() == "lion":
-        optimizer = torch.optim.Adam(trainable_params, lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = Lion(trainable_params, lr=args.lr, weight_decay=args.weight_decay)
     elif args.optimizer.lower() == "galore_lion":
         optimizer = GaLoreLion(param_groups, lr=args.lr, weight_decay=args.weight_decay)
     else:
