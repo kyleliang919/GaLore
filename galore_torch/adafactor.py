@@ -188,9 +188,9 @@ class Adafactor(Optimizer):
                 # GaLore Projection
                 if "rank" in group:
                     if "projector" not in state:
-                        state["projector"] = GaLoreProjector(group["rank"], update_proj_gap=group["update_proj_gap"], scale=group["scale"], proj_type=group["proj_type"])
+                        state["projector"] = GaLoreProjector(group["rank"], update_proj_gap=group["update_proj_gap"], scale=group["scale"], proj_type=group["proj_type"], lamb = group["lamb"], update_proj_first = group["update_proj_first"])
                     
-                    grad = state["projector"].project(grad, state["step"])
+                    grad = state["projector"].project(grad, state["step"], update_proj_stepsize_ratio = group["lr"]/self.init_lr, name = group["names"][i])
 
                 grad_shape = grad.shape
 
