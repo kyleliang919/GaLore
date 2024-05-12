@@ -27,6 +27,7 @@ from peft_pretraining.modeling_llama import LlamaForCausalLM
 
 import bitsandbytes as bnb
 from galore_torch import GaLoreAdamW, GaLoreAdamW8bit, GaLoreAdafactor
+from galore_torch import Lion, GaLoreLion
 
 transformers.logging.set_verbosity_error()
 
@@ -376,7 +377,10 @@ def main(args):
                 p.register_post_accumulate_grad_hook(optimizer_hook)
                 
         layer_wise_flag = True
-        
+    elif args.optimizer.lower() == "lion":
+        optimizer = torch.optim.Adam(trainable_params, lr=args.lr, weight_decay=args.weight_decay)
+    elif args.optimizer.lower() == "galore_lion":
+        optimizer = GaLoreLion(param_groups, lr=args.lr, weight_decay=args.weight_decay)
     else:
         raise ValueError(f"Optimizer {args.optimizer} not supported")
 
