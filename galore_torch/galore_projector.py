@@ -3,6 +3,7 @@ import math
 import transformers
 import torch
 import bitsandbytes as bnb
+from .lion import Lion
 
 class GaLoreProjector:
     def __init__(self, rank, verbose=False, update_proj_gap=200, scale=1.0, proj_type='std', lamb = None, eight_bit = False, update_proj_first = True):
@@ -56,14 +57,28 @@ class GaLoreProjector:
                 if self.ortho_matrix is None or iter % self.update_proj_gap == 0:
                     self.ortho_matrix = self.get_orthogonal_matrix(torch.randn_like(full_rank_grad), self.rank, type='left')
                 low_rank_grad = torch.matmul(self.ortho_matrix.t(), full_rank_grad)         
-        elif self.proj_type == 'continuous':
+        elif 'continuous' in self.proj_type:
             if full_rank_grad.shape[0] >= full_rank_grad.shape[1]:
                 if self.ortho_matrix is None:
                     self.ortho_matrix = self.get_orthogonal_matrix(full_rank_grad, self.rank, type='right')
-                    if not self.eight_bit:
-                        self.ortho_matrix_optim = torch.optim.AdamW([self.ortho_matrix], lr = 1/self.update_proj_gap)
+                    if "adafactor" in self.proj_type:
+                        self.ortho_matrix_optim = transformers.optimization.Adafactor(
+                                                    [self.ortho_matrix],
+                                                    lr=1/self.update_proj_gap,
+                                                    eps=(1e-30, 1e-3),
+                                                    clip_threshold=1.0,
+                                                    decay_rate=-0.8,
+                                                    relative_step=False,
+                                                    scale_parameter=False,
+                                                    warmup_init=False,
+                                                )
+                    elif "lion" in self.proj_type:
+                        self.ortho_matrix_optim = Lion([self.ortho_matrix], lr=1/self.update_proj_gap)
                     else:
-                        self.ortho_matrix_optim = bnb.optim.Adam8bit([self.ortho_matrix], lr=1/self.update_proj_gap)
+                        if not self.eight_bit:
+                            self.ortho_matrix_optim = torch.optim.AdamW([self.ortho_matrix], lr = 1/self.update_proj_gap)
+                        else:
+                            self.ortho_matrix_optim = bnb.optim.Adam8bit([self.ortho_matrix], lr=1/self.update_proj_gap)
                 else:
                     with torch.enable_grad():
                         self.ortho_matrix.requires_grad=True
@@ -89,10 +104,24 @@ class GaLoreProjector:
             else:
                 if self.ortho_matrix is None:
                     self.ortho_matrix = self.get_orthogonal_matrix(full_rank_grad, self.rank, type='left')
-                    if not self.eight_bit:
-                        self.ortho_matrix_optim = torch.optim.AdamW([self.ortho_matrix], lr = 1/self.update_proj_gap)
+                    if "adafactor" in self.proj_type:
+                        self.ortho_matrix_optim = transformers.optimization.Adafactor(
+                                                    [self.ortho_matrix],
+                                                    lr=1/self.update_proj_gap,
+                                                    eps=(1e-30, 1e-3),
+                                                    clip_threshold=1.0,
+                                                    decay_rate=-0.8,
+                                                    relative_step=False,
+                                                    scale_parameter=False,
+                                                    warmup_init=False,
+                                                )
+                    elif "lion" in self.proj_type:
+                        self.ortho_matrix_optim = Lion([self.ortho_matrix], lr=1/self.update_proj_gap)
                     else:
-                        self.ortho_matrix_optim = bnb.optim.Adam8bit([self.ortho_matrix], lr=1/self.update_proj_gap)
+                        if not self.eight_bit:
+                            self.ortho_matrix_optim = torch.optim.AdamW([self.ortho_matrix], lr = 1/self.update_proj_gap)
+                        else:
+                            self.ortho_matrix_optim = bnb.optim.Adam8bit([self.ortho_matrix], lr=1/self.update_proj_gap)
                 else:
                     with torch.enable_grad():
                         self.ortho_matrix.requires_grad = True
@@ -140,7 +169,7 @@ class GaLoreProjector:
                 full_rank_grad = torch.matmul(low_rank_grad, self.ortho_matrix)
             else:
                 full_rank_grad = torch.matmul(self.ortho_matrix, low_rank_grad)
-        elif self.proj_type == 'continuous':
+        elif 'continuous' in self.proj_type:
             if low_rank_grad.shape[0] >= low_rank_grad.shape[1]:
                 full_rank_grad = torch.matmul(low_rank_grad, self.ortho_matrix)
             else:
