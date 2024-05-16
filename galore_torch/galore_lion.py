@@ -58,7 +58,7 @@ class GaLoreLion(Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-            for p in filter(lambda p: exists(p.grad), group['params']):
+            for i, p in enumerate(filter(lambda p: exists(p.grad), group['params'])):
 
                 grad, lr, wd, beta1, beta2, state = p.grad, group['lr'], group['weight_decay'], *group['betas'], self.state[p]
 
