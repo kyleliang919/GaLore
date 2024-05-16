@@ -63,8 +63,6 @@ class GaLoreLion(Optimizer):
                 grad, lr, wd, beta1, beta2, state = p.grad, group['lr'], group['weight_decay'], *group['betas'], self.state[p]
 
                 # init state - exponential moving average of gradient values
-                if len(state) == 0:
-                    state['exp_avg'] = torch.zeros_like(grad)
                     
                 if "step" not in state:
                     state["step"] = 0
@@ -74,6 +72,9 @@ class GaLoreLion(Optimizer):
                     if "projector" not in state:
                         state["projector"] = GaLoreProjector(group["rank"], update_proj_gap=group["update_proj_gap"], scale=group["scale"], proj_type=group["proj_type"], lamb = group["lamb"], update_proj_first = group["update_proj_first"])
                     grad = state["projector"].project(grad, state["step"], update_proj_stepsize_ratio = group["lr"]/self.init_lr, name = group["names"][i])
+
+                if "exp_avg" not in state:
+                    state['exp_avg'] = torch.zeros_like(grad)
                     
                 exp_avg = state['exp_avg']
                 
