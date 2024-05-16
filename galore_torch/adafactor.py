@@ -127,7 +127,8 @@ class Adafactor(Optimizer):
             "warmup_init": warmup_init,
         }
         super().__init__(params, defaults)
-
+        self.init_lr = lr
+        
     @staticmethod
     def _get_lr(param_group, param_state):
         rel_step_sz = param_group["lr"]
