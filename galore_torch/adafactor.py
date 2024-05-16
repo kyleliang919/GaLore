@@ -172,7 +172,7 @@ class Adafactor(Optimizer):
             loss = closure()
 
         for group in self.param_groups:
-            for p in group["params"]:
+            for i, p in enumerate(group["params"]):
                 if p.grad is None:
                     continue
                 grad = p.grad
