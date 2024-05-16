@@ -62,7 +62,9 @@ class GaLoreLion(Optimizer):
                 grad, lr, wd, beta1, beta2, state = p.grad, group['lr'], group['weight_decay'], *group['betas'], self.state[p]
 
                 # init state - exponential moving average of gradient values
-
+                if "step" not in state:
+                    state["step"] = 0
+                    
                 # GaLore Projection
                 if "rank" in group:
                     if "projector" not in state:
@@ -86,7 +88,8 @@ class GaLoreLion(Optimizer):
                 update = update.sign_()
                 
                 p.add_(update, alpha = -lr)
-            
+                state["step"] += 1
+                
                 # decay the momentum running average coefficient
             
                 exp_avg.mul_(beta2).add_(grad, alpha = 1 - beta2)
