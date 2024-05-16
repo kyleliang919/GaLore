@@ -2,7 +2,7 @@ from typing import Tuple, Optional, Callable
 
 import torch
 from torch.optim.optimizer import Optimizer
-from .galore_projector import GaLoreProjector
+from galore_projector import GaLoreProjector
 
 # functions
 
