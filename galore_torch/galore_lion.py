@@ -44,7 +44,8 @@ class GaLoreLion(Optimizer):
         super().__init__(params, defaults)
 
         self.update_fn = update_fn
-
+        self.init_lr = lr
+        
     @torch.no_grad()
     def step(
         self,
