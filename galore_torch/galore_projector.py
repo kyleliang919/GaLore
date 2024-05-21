@@ -74,6 +74,8 @@ class GaLoreProjector:
                                                 )
                     elif "lion" in self.proj_type:
                         self.ortho_matrix_optim = Lion([self.ortho_matrix], lr=1/self.update_proj_gap)
+                    elif "sgd" in self.proj_type:
+                        self.ortho_matrix_optim = torch.optim.SGD([self.ortho_matrix], lr = 1/self.update_proj_gap)
                     else:
                         if not self.eight_bit:
                             self.ortho_matrix_optim = torch.optim.AdamW([self.ortho_matrix], lr = 1/self.update_proj_gap)
@@ -117,6 +119,8 @@ class GaLoreProjector:
                                                 )
                     elif "lion" in self.proj_type:
                         self.ortho_matrix_optim = Lion([self.ortho_matrix], lr=1/self.update_proj_gap)
+                    elif "sgd" in self.proj_type:
+                        self.ortho_matrix_optim = torch.optim.SGD([self.ortho_matrix], lr = 1/self.update_proj_gap)
                     else:
                         if not self.eight_bit:
                             self.ortho_matrix_optim = torch.optim.AdamW([self.ortho_matrix], lr = 1/self.update_proj_gap)
